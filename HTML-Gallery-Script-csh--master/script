@@ -1,0 +1,188 @@
+#!/bin/csh
+#Assignment1 Making an HTML Vacation Gallery
+
+
+#lines 16, 43, 44, 59, 60
+
+#variable containing the usage message
+set usage="Usage: create_images input_dir output_dir pattern_1 [pattern_2] ... [pattern_n]"
+#variable containing suffix for thumbnail image names
+set thumb="_thumb"
+set nl="\
+"
+
+#record the input directory and output directory in variables input_d and output_d
+set input_d="$argv[1]" output_d="$argv[2]"
+
+#if thumbs folder does not already exist, create it
+if (! -d $output_d/thumbs) then
+  mkdir $output_d/thumbs
+endif
+
+
+set dir="/"
+
+if ( "$output_d" =~ *"$dir") then  #Code to chop the / off the end of the output directory
+  set hold=`echo "$output_d" | sed 's/.$//'`
+  set output_d = $hold
+endif
+
+if ( "$input_d" =~ *"$dir") then  #Code to chop the / off the end of the input directory
+  set hold=`echo "$input_d" | sed 's/.$//'`
+  set input_d = $hold
+endif
+
+set images=()
+
+#print error message if invalid input, then exit
+if ("$#argv" < 3) then
+  echo "ERROR: not enough input arguments"
+  echo "$usage"
+  echo $nl
+  exit
+else if (! -d $argv[1]) then
+  echo "ERROR: input directory '$argv[1]' does not exist"
+  echo "$usage"
+  echo $nl
+  exit
+else if (! -r $argv[1]) then
+  echo "ERROR: input directory '$argv[1]' is not readable"
+  echo "$usage"
+  echo $nl
+  exit
+else if (! -d $argv[2]) then
+  echo "ERROR: ouput directory '$argv[2]' does not exist"
+  echo "$usage"
+  echo $nl
+  exit
+endif
+
+
+
+
+#shift $argv over to the patterns input by the user
+shift
+shift
+
+#loop while there are still patterns to be tested
+while ("$#argv" > 0)
+  #chech if the extension of the given pattern matches png, gif, or tiff
+  if ("$argv[1]:e" == "png" | "$argv[1]:e" == "gif" |"$argv[1]:e" == "tiff") then
+    #set variable hold to an array of files found in the input directory matching the given pattern
+    set hold=`find ./$input_d -name "$argv[1]"`
+    #loop through images in the variable hold
+    foreach var ($hold)
+      #set variable "name" to the name of the given file in uppercase without its extension
+      set name=`basename "$var" ".$var:e" | tr "[a-z]" "[A-Z]"`
+
+      #check for duplicate images in thumbs and output directory
+      set duplicate=`find ./$output_d -name "$name.jpg"`
+      set duplicateThumb=`find ./$output_d/thumbs -name "$name$thumb.jpg"`
+      if ("$duplicate" == "" && "$duplicateThumb" == "") then
+        #convert the selected image to a jpg of the same name (in uppercase), move it to the output directory
+        convert "$var" "$name.jpg" ; mv "$name.jpg" $output_d
+        set images=("$images" "$name")
+        #contains width of the given image
+        set width=`identify -format '%w' "$var"`
+        #contains height of the given image
+        set height=`identify -format '%h' "$var"`
+
+        #make smallest dimension of thumbnail image 200 pixels
+        #name thumbnail image NAME_thumb and move it to the thumbs folder in the output directory
+        if ($width < $height) then
+          convert "$var" -resize x200 "$name$thumb.jpg" ; mv "$name$thumb.jpg" $output_d/thumbs
+        else
+          convert "$var" -resize 200 "$name$thumb.jpg" ; mv "$name$thumb.jpg" $output_d/thumbs
+        endif
+      endif
+    end
+
+
+  #print error message and exit if a given pattern is not recognized
+  else
+    echo "ERROR: pattern '$argv[1]' not recognized"
+    echo "$usage"
+    echo $nl
+    exit
+  endif
+#go to the next input pattern
+shift
+end
+
+#echo $images
+#Setup page and ask for theme message input
+echo -n "Enter a Theme Message for your webpage"
+set theme = $<
+set page="page.html"
+
+#Create webpage, initialize thumbnail array
+set initthumbarray=`find "$output_d/thumbs"` #thumb array input
+touch $page
+#echo $initthumbarray
+#Checking for Thumb duplicates
+set thumbarray=()
+set thumbinc=1
+set pinkieinc=1
+set skipp=1 #to skipp the initial thumb array value
+
+
+foreach thumb ($initthumbarray) #Creates an array of thumbnails to publish
+  set mythumb = `echo "$thumb" | sed 's#.*/##'`
+  set cutthumb =( $mythumb:as/_/ / )
+  set thumbname=$cutthumb[1]
+  set passestest = 0
+  foreach pinkie ($images)
+     if ($thumbname == $pinkie && !(skipp == 1)) then
+        set passestest = 1
+     endif
+  end
+  set skipp = 2
+  if ($passestest == 1) then
+     set thumbarray = ($thumbarray $thumb)
+  endif
+end
+
+
+#Begin HTML Code
+echo "<HTML><HEAD><TITLE>$theme</TITLE></HEAD><BODY><th> MY VACATION GALLERY </th>" >! $page
+echo " <br> <br> <table border = 2> <tr>" >> $page
+
+set inc=1
+set ext=".jpg"
+set pre="./"
+
+#thumb images loop
+while($inc <= $#thumbarray)
+  set mythumb = `echo "$thumbarray[$inc]" | sed 's#.*/##'`
+  set cutthumb =( $mythumb:as/_/ / )
+  set thumbname=$cutthumb[1]
+  echo $pre$output_d$dir$thumbname$ext
+  echo "<td> <a href=$pre$output_d$dir$thumbname$ext><img src= $thumbarray[$inc] /></a> </td>" >> $page
+  @ inc++
+end
+echo "  </tr><tr>" >> $page
+set inc=1
+
+echo $images
+
+#thumb sizes loop
+while($inc <= $#thumbarray)
+  echo "<td  align="center">  `identify -format '%wx%h' "$thumbarray[$inc]"` </td>" >> $page
+  @ inc++
+end
+echo "  </tr><tr>" >> $page
+set inc=1
+
+
+#thumb modify date loop
+while($inc <= $#thumbarray)
+set stat=`stat -c%y $thumbarray[$inc]`
+set split = ($stat:as/:/,/)
+echo "<td align="center">  $split[1] </td>" >> $page
+  @ inc++
+end
+set mydate=`date`
+
+#Table and body end
+echo "</tr></table>   <p> Theme: < $theme > </p>\
+<p> Date & day: < $mydate > </p></BODY></HTML> " >> $page
