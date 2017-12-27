@@ -1,5 +1,6 @@
+# Java Algorithm Implementation Samples
+
 1. Navigate to the proper directory 
-	eg for problem 1: $ cd p1 
 2. Run this command to ensure the run.sh script is executable on your machine
 	$ chmod +x run.sh
 3. type ./run.sh <input.txt>
